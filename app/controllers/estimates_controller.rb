@@ -1,7 +1,7 @@
 class EstimatesController < ApplicationController
-  load_and_authorize_resource :only => [:index, :show, :create, :destroy, :update, :new, :edit]
   before_filter :authenticate_user!
   before_filter :set_per_page_session
+  after_action :user_introduction, only: [:index, :new], unless: -> { current_user.introduction.estimate? && current_user.introduction.new_estimate? }
   protect_from_forgery except: [:preview]
   before_filter :authenticate_user!, except: [:preview]
   helper_method :sort_column, :sort_direction
@@ -13,9 +13,10 @@ class EstimatesController < ApplicationController
   def index
     params[:status] = params[:status] || 'active'
     @status = params[:status]
-    @estimates = Estimate.joins("LEFT OUTER JOIN clients ON clients.id = estimates.client_id ").filter(params,@per_page).order("#{sort_column} #{sort_direction}")
+    @estimates = Estimate.with_clients.filter(params,@per_page).order("#{sort_column} #{sort_direction}")
     @estimates = filter_by_company(@estimates)
     @estimate_activity = Reporting::EstimateActivity.get_recent_activity(get_company_id, @per_page, params.deep_dup)
+    authorize @estimates
     respond_to do |format|
       format.html # index.html.erb
       format.js
@@ -29,6 +30,7 @@ class EstimatesController < ApplicationController
 
   def show
     @estimate = Estimate.find(params[:id])
+    authorize @estimate
     @client = Client.unscoped.find_by_id @estimate.client_id
     respond_to do |format|
       format.html # show.html.erb
@@ -38,6 +40,7 @@ class EstimatesController < ApplicationController
 
   def new
     @estimate = Services::EstimateService.build_new_estimate(params)
+    authorize @estimate
     @client = Client.find params[:estimate_for_client] if params[:estimate_for_client].present?
     @client = @estimate.client if params[:id].present?
     @estimate.currency = @client.currency if @client.present?
@@ -53,6 +56,7 @@ class EstimatesController < ApplicationController
 
   def create
     @estimate = Estimate.new(estimate_params)
+    authorize @estimate
     @estimate.status = params[:save_as_draft] ? 'draft' : 'sent'
     @estimate.company_id = get_company_id()
     @estimate.create_line_item_taxes()
@@ -70,6 +74,7 @@ class EstimatesController < ApplicationController
 
   def edit
     @estimate = Estimate.find(params[:id])
+    authorize @estimate
     @estimate.estimate_line_items.build()
     get_clients_and_items
     @discount_types = @estimate.currency.present? ? ['%', @estimate.currency.unit] : DISCOUNT_TYPE
@@ -79,6 +84,7 @@ class EstimatesController < ApplicationController
 
   def update
     @estimate = Estimate.find(params[:id])
+    authorize @estimate
     @estimate.company_id = get_company_id()
     @notify = params[:send_and_save].present? ? true : false
     respond_to do |format|
@@ -96,10 +102,11 @@ class EstimatesController < ApplicationController
 
   def destroy
     @estimate = Estimate.find(params[:id])
+    authorize @estimate
     @estimate.destroy
 
     respond_to do |format|
-      format.html { redirect_to estimates_url }
+      format.html { redirect_to estimates_path }
       format.json { render_json(@estimate) }
     end
   end
@@ -127,6 +134,7 @@ class EstimatesController < ApplicationController
   def send_estimate
     estimate = Estimate.find(params[:id])
     estimate.send_estimate(current_user, params[:id])
+    respond_to {|format| format.js}
   end
 
   def bulk_actions
@@ -137,7 +145,7 @@ class EstimatesController < ApplicationController
     @action = result[:action]
     respond_to do |format|
       format.js
-      format.html {redirect_to estimates_url, notice: t('views.estimates.bulk_action_msg', action: @action)}
+      format.html {redirect_to estimates_path, notice: t('views.estimates.bulk_action_msg', action: @action)}
     end
   end
 
@@ -178,6 +186,18 @@ class EstimatesController < ApplicationController
 
     respond_to do |format|
       format.html {render template: 'estimates/preview.html.erb', layout:  'pdf_mode'}
+      format.js
+    end
+  end
+
+  def set_client_currency
+    @client = Client.find params[:client_id]
+    if Settings.currency.eql?('Off') && Settings.default_currency.present?
+      @currency = Currency.find_by(unit: Settings.default_currency)
+    else
+      @currency = @client.currency
+    end
+    respond_to do |format|
       format.js
     end
   end

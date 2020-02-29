@@ -335,7 +335,8 @@ CUSTOM_FIELDS = {
             {label: 'Company Contact', token: '{{company_contact}}'},
             {label: 'Company Phone', token: '{{company_phone}}'},
             {label: 'Company Signature', token: '{{company_signature}}'},
-            {label: 'Invoice URL', token: '{{invoice_url}}'}
+            {label: 'Invoice URL', token: '{{invoice_url}}'},
+            {label: 'Password URL', token: '{{new_password_url}}'},
         ],
 
     'Payment Received' =>
@@ -410,12 +411,25 @@ CUSTOM_FIELDS = {
             {label: 'Invoice Number', token: '{{invoice_number}}'},
             {label: 'Company Signature', token: '{{company_signature}}'},
             {label: 'Invoice URL', token: '{{invoice_url}}'}
+        ],
+    'Invoice Number Format' =>
+        [
+            {label: 'Invoice Number', token: '{{invoice_number}}'},
+            {label: 'Client Name', token: '{{client_contact}}'},
+            {label: 'Company Name', token: '{{company_name}}'},
+            {label: 'Company Contact', token: '{{company_contact}}'},
+            {label: 'Invoice Year', token: '{{invoice_year}}'},
+            {label: 'Invoice Month', token: '{{invoice_month}}'},
+            {label: 'Invoice Day', token: '{{invoice_day}}'},
+            {label: 'Company Abbreviation', token: '{{company_abbreviation}}'}
         ]
 }
 
-ROLES = ['admin', 'manager', 'staff']
+ROLE = 'Super Admin'
 
 ENTITIES = ['Account','Category', 'Client', 'Company', 'CompanyEmailTemplate', 'CompanyEntity', 'Currency', 'EmailTemplate', 'Estimate', 'ExpenseCategory', 'Expense', 'InvoiceLineItem', 'InvoiceTask', 'Invoice', 'Item', 'LineItemTax', 'Log', 'PaymentTerm', 'Payment', 'ProjectTask', 'Project', 'RecurringProfileLineItem', 'RecurringProfile', 'Role', 'SentEmail', 'Staff', 'Task', 'TeamMember']
+
+ENTITY_TYPES = %w(Invoice Estimate Time\ Tracking Payment Client Item Taxes Report Settings)
 
 
 FREEPLAN = ['5 Clients', 'Unlimited Invoices', 'Unlimited sub users' , 'Free Reporting']

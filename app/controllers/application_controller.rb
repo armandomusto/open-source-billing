@@ -19,13 +19,21 @@
 # along with Open Source Billing.  If not, see <http://www.gnu.org/licenses/>.
 #
 class ApplicationController < ActionController::Base
+  before_filter :set_trackstamps_user
+  def set_trackstamps_user
+    Thread.current[:current_user] = current_user
+  end
   #Time::DATE_FORMATS.merge!(:default=> "%Y/%m/%d")
   #Time::DATE_FORMATS.merge!(:short=> "%d")
   #Time::DATE_FORMATS.merge!(:long=> "%B %d, %Y")
   #before_filter :authenticate_user_from_token!
   # This is Devise's authentication
-
+  include Pundit
   include ApplicationHelper
+  include PublicActivity::StoreController
+
+  rescue_from Pundit::NotAuthorizedError, with: :user_not_authorized
+
   acts_as_token_authentication_handler_for User, if: lambda { |env| env.request.format.json? && controller_name != 'authenticate' }
   before_filter :configure_permitted_parameters, if: :devise_controller?
   protect_from_forgery
@@ -40,10 +48,9 @@ class ApplicationController < ActionController::Base
   before_filter :set_current_company
 
   before_action :set_locale
-  rescue_from CanCan::AccessDenied do |exception|
-    redirect_to dashboard_url, :alert => exception.message
-  end
 
+
+  layout Proc.new{ 'login' if devise_controller? }
 
   def _reload_libs
     if defined? RELOAD_LIBS
@@ -53,13 +60,55 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  def after_sign_in_path_for(user)
-    dashboard_path
+  def user_introduction
+    current_user.introduction.update_attribute(cookies[:intro], true)
+    # if params[:controller].eql?('dashboard') && params[:action].eql?('index')
+    #   current_user.introduction.update_attribute(:dashboard, true)
+    # elsif params[:controller].eql?('invoices') && params[:action].eql?('index')
+    #   current_user.introduction.update_attribute(:invoice, true)
+    # elsif params[:controller].eql?('invoices') && params[:action].eql?('new')
+    #   current_user.introduction.update_attribute(:new_invoice, true)
+    # elsif params[:controller].eql?('estimates') && params[:action].eql?('index')
+    #   current_user.introduction.update_attribute(:estimate, true)
+    # elsif params[:controller].eql?('estimates') && params[:action].eql?('new')
+    #   current_user.introduction.update_attribute(:new_estimate, true)
+    # elsif params[:controller].eql?('payments') && params[:action].eql?('index')
+    #   current_user.introduction.update_attribute(:payment, true)
+    # elsif params[:controller].eql?('payments') && params[:action].eql?('enter_payment')
+    #   current_user.introduction.update_attribute(:new_payment, true)
+    # elsif params[:controller].eql?('clients') && params[:action].eql?('index')
+    #   current_user.introduction.update_attribute(:client, true)
+    # elsif params[:controller].eql?('clients') && params[:action].eql?('new')
+    #   current_user.introduction.update_attribute(:new_client, true)
+    # elsif params[:controller].eql?('items') && params[:action].eql?('index')
+    #   current_user.introduction.update_attribute(:item, true)
+    # elsif params[:controller].eql?('items') && params[:action].eql?('new')
+    #   current_user.introduction.update_attribute(:new_item, true)
+    # elsif params[:controller].eql?('taxes') && params[:action].eql?('index')
+    #   current_user.introduction.update_attribute(:tax, true)
+    # elsif params[:controller].eql?('taxes') && params[:action].eql?('new')
+    #   current_user.introduction.update_attribute(:new_tax, true)
+    # elsif params[:controller].eql?('reports') && params[:action].eql?('invoice_detail')
+    #   current_user.introduction.update_attribute(:report, true)
+    # elsif params[:controller].eql?('settings') && params[:action].eql?('index')
+    #   current_user.introduction.update_attribute(:setting, true)
+    # end
   end
 
-  def after_sign_out_path_for(user)
-    #categories_path
-    dashboard_path
+  def after_sign_in_path_for(resource)
+    if resource.is_a?(User)
+      dashboard_path(locale: :en)
+    else
+      portal_dashboard_index_path(locale: :en)
+    end
+  end
+
+  def after_sign_out_path_for(resource_or_scope)
+    if resource_or_scope == :user
+      new_user_session_path(locale: :en)
+    else
+      new_portal_client_session_path(locale: :en)
+    end
   end
 
   def encryptor
@@ -180,7 +229,7 @@ class ApplicationController < ActionController::Base
 
   def set_listing_layout
     if params[:view].nil? && current_user
-    session[:view] ||= current_user.settings.index_page_format || 'card'
+      session[:view] ||= current_user.settings.index_page_format || 'card'
     else
       session[:view] = params[:view]
     end
@@ -218,4 +267,17 @@ class ApplicationController < ActionController::Base
   def default_url_options(options = {})
     { locale: I18n.locale }.merge options
   end
+
+
+  private
+
+  def user_not_authorized
+    flash[:alert] = "You are not authorized to perform this action."
+    if request.format.js?
+      render js:  "window.location = '#{request.referrer || root_path}'"
+    else
+      redirect_to(request.referrer || root_path)
+    end
+  end
+
 end

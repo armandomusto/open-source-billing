@@ -20,9 +20,9 @@
 #
 class ItemsController < ApplicationController
   #before_filter :authenticate_user!
-  load_and_authorize_resource :only => [:index, :show, :create, :destroy, :update, :new, :edit]
   protect_from_forgery :except => [:load_item_data]
   before_filter :set_per_page_session
+  after_action :user_introduction, only: [:index, :new], unless: -> { current_user.introduction.item? && current_user.introduction.new_item? }
   helper_method :sort_column, :sort_direction
   # GET /items
   # GET /items.json
@@ -36,6 +36,7 @@ class ItemsController < ApplicationController
     @status = params[:status]
     @items = Item.get_items(params.merge(get_args))
     @items_activity = Reporting::ItemActivity.get_recent_activity(get_company_id,current_user, params.deep_dup)
+    authorize Item
 
     #@items = @items.joins('LEFT JOIN taxes as tax1 ON tax1.id = items.tax_1') if sort_column == 'tax1.name'
     #@items = @items.joins('LEFT JOIN taxes as tax2 ON tax2.id = items.tax_2') if sort_column == 'tax2.name'
@@ -55,6 +56,7 @@ class ItemsController < ApplicationController
   # GET /items/1.json
   def show
     @item = Item.find(params[:id])
+    authorize @item
 
     respond_to do |format|
       format.html # show.html.erb
@@ -67,6 +69,7 @@ class ItemsController < ApplicationController
   # GET /items/new.json
   def new
     @item = params[:id] ? Item.find_by_id(params[:id]).dup : Item.new
+    authorize @item
     respond_to do |format|
       format.html # new.html.erb
       format.js
@@ -78,6 +81,7 @@ class ItemsController < ApplicationController
   # GET /items/1/edit
   def edit
     @item = Item.find(params[:id])
+    authorize @item
     respond_to do |format|
       format.js
 
@@ -95,6 +99,7 @@ class ItemsController < ApplicationController
       return
     end
     @item = Item.new(item_params)
+    authorize @item
     options = params[:position].present? ? params.merge(company_ids: company_id) : params
     associate_entity(options, @item)
     respond_to do |format|
@@ -118,6 +123,7 @@ class ItemsController < ApplicationController
   # PUT /items/1.json
   def update
     @item = Item.find(params[:id])
+    authorize @item
     associate_entity(params, @item)
     respond_to do |format|
       if @item.update_attributes(item_params)
@@ -134,10 +140,11 @@ class ItemsController < ApplicationController
   # DELETE /items/1.json
   def destroy
     @item = Item.find(params[:id])
+    authorize @item
     @item.destroy
 
     respond_to do |format|
-      format.html { redirect_to items_url }
+      format.html { redirect_to items_path }
       format.json { head :no_content }
     end
   end
@@ -145,7 +152,7 @@ class ItemsController < ApplicationController
 #  # Load invoice line items data when an item is selected from drop down list
   def load_item_data
     item = Item.find_by_id(params[:id]).present? ?  Item.find(params[:id]) : Item.unscoped.find_by_id(params[:id])
-    render :text => [item.item_description || "", item.unit_cost.to_f || 1, item.quantity.to_i || 1, item.tax_1 || 0, item.tax_2 || 0, item.item_name || "", item.tax1_name || "", item.tax2_name || "", item.tax1_percentage || 0, item.tax2_percentage || 0 ]
+    render :text => [item.item_description || "", item.unit_cost.to_f || 1, item.quantity.to_f || 1, item.tax_1 || 0, item.tax_2 || 0, item.item_name || "", item.tax1_name || "", item.tax2_name || "", item.tax1_percentage || 0, item.tax2_percentage || 0 ]
   end
 
   def bulk_actions
@@ -157,7 +164,7 @@ class ItemsController < ApplicationController
     @action = result[:action]
 
     respond_to do |format|
-      format.html { redirect_to items_url, notice: t('views.items.bulk_action_msg', action: @action) }
+      format.html { redirect_to items_path, notice: t('views.items.bulk_action_msg', action: @action) }
       format.js
       format.json
     end

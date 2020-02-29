@@ -6,6 +6,7 @@ class @Estimate
     updateCurrencyUnitsAndDiscountSelect()
     OsbPlugins.updateMaterializeSelect()
 
+
   @changeTax = ->
     jQuery("select.tax1, select.tax2").on "change", ->
       if $(this).val() == ''
@@ -17,26 +18,6 @@ class @Estimate
       EstimateCalculator.updateLineTotal(jQuery(this))
       EstimateCalculator.updateEstimateTotal()
 
-  @change_invoice_item  = (elem) ->
-    $('.invoice_grid_fields select.items_list').on 'change', ->
-      if parseInt($(this).find(':selected').val()) != -1
-        OsbPlugins.hidePopover($("table#invoice_grid_fields tr.fields:visible:first td:nth-child(2)"))
-        elem = undefined
-        elem = $(this)
-        if elem.val() == ''
-          clearLineTotal elem
-          false
-        else
-          $.ajax '/items/load_item_data',
-            type: 'POST'
-            data: 'id=' + $(this).val()
-            dataType: 'html'
-            error: (jqXHR, textStatus, errorThrown) ->
-              alert 'Error: ' + textStatus
-            success: (data, textStatus, jqXHR) ->
-              item = JSON.parse(data)
-              container = elem.parents('tr.fields')
-
   @change_estimate_item  = ->
     $('.estimate_grid_fields select.items_list').on 'change', ->
       if parseInt($(this).find(':selected').val()) != -1
@@ -47,7 +28,7 @@ class @Estimate
           clearLineTotal elem
           false
         else
-          $.ajax '/items/load_item_data',
+          $.ajax load_item,
             type: 'POST'
             data: 'id=' + $(this).val()
             dataType: 'html'
@@ -62,7 +43,7 @@ class @Estimate
               container.find('td.cost').html item[1].toFixed(2)
               container.find('input.qty').val item[2]
               container.find('td.qty').html item[2]
-              OsbPlugins.empty_tax_fields(container)
+#              OsbPlugins.empty_tax_fields(container)
               if item[3] != 0
                 container.find('select.tax1').val(item[3]).trigger('contentChanged');
                 container.find('input.tax-amount').val item[8]
@@ -72,13 +53,16 @@ class @Estimate
                 container.find('input.tax-amount').val item[9]
                 container.find('td.tax2').html item[7]
               container.find('input.item_name').val item[5]
-              $("select.tax1,select.tax2").trigger('change')
+              EstimateCalculator.updateLineTotal(elem)
+              EstimateCalculator.updateEstimateTotal()
 
   updateCurrencyUnitsAndDiscountSelect = ->
     unit = $('#estimate_currency_id option:selected').text()
     if unit.length > 0
       $('#subtotal_currency_unit').text(unit)
       $('#discount_amount_currency_unit').text(unit)
+      $('#tax_currency_unit').text(unit)
+      $('#total_currency_unit').text(unit)
       $selectDropdown = $('#discount_type').empty().html(' ').prop("disabled", false)
       $selectDropdown.append($("<option></option>").attr("value", '%').text("%"))
       $selectDropdown.append($("<option></option>").attr("value", unit).text(unit))

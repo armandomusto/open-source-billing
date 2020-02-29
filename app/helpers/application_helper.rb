@@ -28,6 +28,22 @@ module ApplicationHelper
     super number,options
   end
 
+  def intro_class
+    if params[:action].eql?('new') || params[:action].eql?('enter_payment')
+      params[:controller]+"-"+params[:action]+"-"+"#{current_user.introduction.send('new_'+params[:controller].singularize)}"+"-intro"
+    else
+      params[:controller]+"-"+params[:action]+"-"+"#{current_user.introduction.send(params[:controller].singularize)}"+"-intro"
+    end
+  end
+
+  def get_introduction_parameter
+    if params[:action].eql?('index') || params[:action].eql?('invoice_detail')
+     cookies[:intro] = params[:controller].singularize
+    elsif params[:action].eql?('new') || params[:action].eql?('enter_payment')
+       cookies[:intro] = "new_"+params[:controller].singularize
+    end
+  end
+
   # to add a active class to current link on main menu
   def nav_link(text, link)
     recognized = Rails.application.routes.recognize_path(link)
@@ -58,11 +74,11 @@ module ApplicationHelper
     link_to_function (block_given? ? capture(&block) : args[0]), "jQuery(this).closest('form').submit();", args.extract_options!
   end
 
-  def sortable(column, title = nil)
+  def sortable(column, title = nil, options={})
     title ||= column.titleize
     css_class = column == sort_column ? "current #{sort_direction}" : nil
     direction = column == sort_column && sort_direction == "asc" ? "desc" : "asc"
-    link_to(params.merge(sort: column, direction: direction, page: 1), {class: "#{css_class} sortable", remote: true}) do
+    request.format.pdf? ? title : link_to(params.merge(sort: column, direction: direction, page: 1), {class: "#{css_class} sortable"}.merge(options)) do
       "#{title} #{sortable_icon(column)}".html_safe
     end
   end
@@ -79,7 +95,7 @@ module ApplicationHelper
     if column == sort_column
       sort_direction == "asc" ? "<i class='fa fa-sort-asc'></i>" : "<i class='fa fa-sort-desc'></i>"
     else
-      "<i class='fa fa-sort'></i>"
+      # "<i class='fa fa-sort'></i>"
     end
   end
 
@@ -100,7 +116,7 @@ module ApplicationHelper
         association = controller == 'email_templates' ? CompanyEmailTemplate.where(template_id: item.id, parent_id: company.id) : CompanyEntity.where(entity_id: item.id, parent_id: company.id, entity_type: controller.classify)
         checked, global_status = 'checked', 'checked' if company.send(controller).present? && association.present?
       end
-      list += "<div class='col s12 m6 l4'>
+      list += "<div class='col s12 m6 l4 company-checkbox'>
                   <input type = 'checkbox' #{checked} name='company_ids[]' value='#{company.id}' id='company_#{company.id}' checked='true' class='company_checkbox filled-in' style='margin-bottom: 15px;'/>
                   <label for='company_#{company.id}'>#{company.company_name}</label>
                 </div>"
@@ -152,8 +168,13 @@ module ApplicationHelper
     current_user.current_company || session[:current_company]
   end
 
+  def current_company_obj
+    Company.find current_company
+
+  end
+
   def filter_select_by_companies
-    Company.all
+    current_user.assigned_companies
   end
 
   # generate drop down to filter listings by company
@@ -355,10 +376,10 @@ module ApplicationHelper
 
   def index_layout_toggle_icons(card_path, table_path)
     content_tag(:div,class: 'right') do
-      link_to( raw('<i class="material-icons">view_comfy</i>'), card_path, class: ('active' if render_card_view?), title: t('views.settings.card_view')) +
-      link_to( raw('<i class="material-icons">view_list</i>'), table_path, class: ('active' unless render_card_view?), title: t('views.settings.table_view')) +
+      link_to( raw("<i class='material-icons intro #{params[:controller]}-index-false-intro' data-intro='You can set the card view by clicking on this icon' data-step='2'>view_comfy</i>"), card_path, class: ('active' if render_card_view?), title: t('views.settings.card_view')) +
+      link_to( raw("<i class='material-icons intro #{params[:controller]}-index-false-intro' data-intro='You can set the table view by clicking on this icon' data-step='3'>view_list</i>"), table_path, class: ('active' unless render_card_view?), title: t('views.settings.table_view')) +
       raw('<div class="separator"></div>') +
-      link_to( raw('<i class="material-icons">tune</i>'), 'javascript:void(0);', class: 'show-filters', id: 'toggle_filters', title: t('views.common.show_filters'))
+      link_to( raw("<i class='material-icons intro #{params[:controller]}-index-false-intro' data-intro='You can filter your #{params[:controller]} from here' data-step='4'>tune</i>"), 'javascript:void(0);', class: 'show-filters', id: 'toggle_filters', title: t('views.common.show_filters'))
     end
   end
 
@@ -381,5 +402,17 @@ module ApplicationHelper
     keys.each {|key| condition = condition || params[key.to_sym].present? }
 
     condition
+  end
+
+  def unread_notifications
+    PublicActivity::Activity.where.not(owner_id: current_user.id, key: 'client.update').where(is_read: false).count
+  end
+
+  def pick_trackable_color
+    {Invoice: 'text-blue', Client: 'text-green', Estimate: 'text-orange', Payment: 'text-red'}
+  end
+
+  def user_activities_listing
+    PublicActivity::Activity.where.not(owner_id: current_user.id, key: 'client.update').order('created_at desc').page(1).per(10) if current_user.present?
   end
 end

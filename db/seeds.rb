@@ -86,6 +86,7 @@ templates = EmailTemplate.create([
             <p><a href="{{invoice_url}}">Invoice# {{invoice_number}}</a> </p>
             <p>Please remit payment at your earliest convenience. For all forms of payment please be sure to include your invoice number {{invoice_number}} for reference.</p>
             <p>If you have any questions or comments please feel free to contact {{company_contact}} at {{company_phone}}.</p>
+            <p>Please login to see your invoice <a href="{{new_password_url}}">Login</a></p>
             <p>Thanks,</p>
             <p>{{company_signature}}</p>'
         },
@@ -261,13 +262,29 @@ CATEGORIES.each do |category|
 end
 
 Role.delete_all
+role = ROLE
+Role.create name: role
 
-ROLES.each do |role|
-  Role.create name: role
-end
+Permission.delete_all
+Permission.create(role_id: Role.first.id, entity_type: "Invoice", can_read: true, can_update: true, can_delete: true, can_create: true)
+Permission.create(role_id: Role.first.id, entity_type: "Estimate", can_read: true, can_update: true, can_delete: true, can_create: true)
+Permission.create(role_id: Role.first.id, entity_type: "Time Tracking", can_read: true, can_update: true, can_delete: true, can_create: true)
+Permission.create(role_id: Role.first.id, entity_type: "Payment", can_read: true, can_update: true, can_delete: true, can_create: true)
+Permission.create(role_id: Role.first.id, entity_type: "Client", can_read: true, can_update: true, can_delete: true, can_create: true)
+Permission.create(role_id: Role.first.id, entity_type: "Item", can_read: true, can_update: true, can_delete: true, can_create: true)
+Permission.create(role_id: Role.first.id, entity_type: "Taxes", can_read: true, can_update: true, can_delete: true, can_create: true)
+Permission.create(role_id: Role.first.id, entity_type: "Report", can_read: true)
+Permission.create(role_id: Role.first.id, entity_type: "Settings", can_read: true)
 
 PaymentTerm.delete_all
 PaymentTerm.create(number_of_days: 10, description: "10 days")
 PaymentTerm.create(number_of_days: 7, description: "Weekly")
 PaymentTerm.create(number_of_days: 30, description: "Monthly")
-PaymentTerm.create(number_of_days: 0, description: "Custom")
+PaymentTerm.create(number_of_days: -1, description: "Custom")
+PaymentTerm.create(number_of_days: 0, description: "Due on received")
+
+Settings.delete_all
+Settings.currency = "On"
+Settings.default_currency = "USD"
+Settings.date_format = "%Y-%m-%d"
+Settings.invoice_number_format = "{{invoice_number}}"

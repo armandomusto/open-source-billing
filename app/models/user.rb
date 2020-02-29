@@ -21,18 +21,20 @@
 class User < ActiveRecord::Base
   include UserSearch
   acts_as_token_authenticatable
-  rolify
   devise :database_authenticatable, :registerable,
          :recoverable, :rememberable, :confirmable, :validatable, :confirmable,
          :encryptable, :encryptor => :restful_authentication_sha1
   validates_uniqueness_of :email, :uniqueness => :true
-  after_create :set_default_settings, :set_default_role
+  after_create :set_default_settings, :set_user_intro
 
   mount_uploader :avatar, ImageUploader
 
   has_one :staff
+  belongs_to :role
   has_many :logs, dependent: :destroy
   has_many :invoices
+  has_and_belongs_to_many :companies
+  has_one :introduction
 
   attr_accessor :account,:login, :notify_user
   include RailsSettings::Extend
@@ -40,7 +42,7 @@ class User < ActiveRecord::Base
 
   #Scopes
   scope :created_at, -> (created_at) { where(created_at: created_at) }
-  scope :role_ids, -> (role_ids) { joins(:users_roles).where(users_roles: {role_id: role_ids}) }
+  scope :role_id, -> (role_id) { where(role_id: role_id) }
 
   class << self
     def current=(user)
@@ -63,19 +65,24 @@ class User < ActiveRecord::Base
     end
   end
 
-  def set_default_settings
-    self.settings.date_format = "%Y-%m-%d"
-    self.settings.currency = "On"
-    self.settings.records_per_page = 9
-    self.settings.default_currency = "USD"
-    self.settings.side_nav_opened = true
-    self.settings.index_page_format = 'cart'
+  def set_user_intro
+    intro = Introduction.new
+    intro.user_id = self.id
+    intro.save
   end
 
-  def set_default_role
-    # sign up user only has admin role
-    return self.add_role :staff if self.staff.present?
-    self.add_role :admin if self.roles.blank?
+  def assigned_companies
+    if self.have_all_companies_access?
+      Company.all
+    else
+      self.companies
+    end
+  end
+
+  def set_default_settings
+    self.settings.records_per_page = 9
+    self.settings.side_nav_opened = true
+    self.settings.index_page_format = 'cart'
   end
 
   def currency_symbol

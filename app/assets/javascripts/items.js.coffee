@@ -32,7 +32,7 @@ class @Item
 
   @load_functions = ->
 
-    $('select').material_select()
+#    $('select').material_select()
     jQuery('#account_association').change ->
       if jQuery(this).is ':checked'
         $('.company_checkbox').prop('checked',true)
@@ -62,9 +62,9 @@ class @Item
       else if $("#item_unit_cost").val() isnt "" and  isNaN($("#item_unit_cost").val())
         applyPopover($("#item_unit_cost"), I18n.t('views.items.must_be_numeric'))
         flag = false
-      else if $("#item_unit_cost").val() isnt "" and !isNaN($("#item_unit_cost").val()) and $("#item_unit_cost").val() <= 0
-        applyPopover($("#item_unit_cost"), I18n.t('views.items.must_be_greater_than_zero'))
-        flag = false
+#      else if $("#item_unit_cost").val() isnt "" and !isNaN($("#item_unit_cost").val())
+#        applyPopover($("#item_unit_cost"), I18n.t('views.items.must_be_greater_than_zero'))
+#        flag = false
       else if $("#item_quantity").val() is ""
         applyPopover($("#item_quantity"), I18n.t('views.items.quantity_required'))
         flag = false

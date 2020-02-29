@@ -19,12 +19,30 @@ class Company < ActiveRecord::Base
   has_many :payments
   has_many :sent_emails
   belongs_to :account
+  belongs_to :base_currency, class_name: 'Currency', foreign_key: :base_currency_id
+  has_one :mail_config
+  has_and_belongs_to_many :users
+
+  accepts_nested_attributes_for :mail_config, reject_if: :all_blank, allow_destroy: true
 
   # archive and delete
   acts_as_archival
   acts_as_paranoid
 
   # filter companies i.e active, archive, deleted
+  def smtp_settings
+    {
+        address: self.mail_config.address,
+        port: self.mail_config.port,
+        authentication: self.mail_config.authentication,
+        enable_starttls_auto: self.mail_config.enable_starttls_auto,
+        user_name: self.mail_config.user_name,
+        password: self.mail_config.password,
+        openssl_verify_mode: self.mail_config.openssl_verify_mode,
+        tls: self.mail_config.tls
+    }
+  end
+
   def self.filter(params)
     mappings = {active: 'unarchived', archived: 'archived', deleted: 'only_deleted'}
     user = User.current
@@ -53,5 +71,13 @@ class Company < ActiveRecord::Base
 
   def group_date
     created_at.strftime('%B %Y')
+  end
+
+  def state
+    province_or_state
+  end
+
+  def zipcode
+    postal_or_zipcode
   end
 end

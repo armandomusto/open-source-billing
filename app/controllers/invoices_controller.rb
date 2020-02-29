@@ -19,15 +19,16 @@
 # along with Open Source Billing.  If not, see <http://www.gnu.org/licenses/>.
 #
 class InvoicesController < ApplicationController
-  load_and_authorize_resource only: %i[index show create destroy update new edit]
 
-  before_action :authenticate_user!, except: %i[preview paypal_payments pay_with_credit_card dispute_invoice payment_with_credit_card]
+  before_action :authenticate_user!, except: %i[show preview paypal_payments pay_with_credit_card dispute_invoice payment_with_credit_card]
+
   before_action :set_per_page_session
-  before_action :get_invoice, only: %i[show edit update stop_recurring send_invoice destroy]
+  before_action :get_invoice, only: %i[show edit update stop_recurring send_invoice destroy clone]
   before_action :verify_authenticity_token, only: :show #if: ->{ action_name == 'show' and request.format.pdf? }
   before_action :set_client_id, only: :create
+  after_action :user_introduction, only: [:index, :new], unless: -> { current_user.introduction.invoice? && current_user.introduction.new_invoice? }
 
-  protect_from_forgery :except => %i[preview paypal_payments create]
+  protect_from_forgery :except => %i[show preview paypal_payments create]
 
   helper_method :sort_column, :sort_direction
 
@@ -39,9 +40,9 @@ class InvoicesController < ApplicationController
   def index
     params[:status] = params[:status] || 'active'
     @status = params[:status]
-    @current_company_invoices = Invoice.by_company(current_company)
+    @current_company_invoices = Invoice.by_company(current_company).joins(:currency)
     @invoices = @current_company_invoices.with_clients.filter(params,@per_page).order("#{sort_column} #{sort_direction}")
-
+    authorize @invoices
     respond_to do |format|
       format.html # index.html.erb
       format.js
@@ -49,9 +50,13 @@ class InvoicesController < ApplicationController
   end
 
   def show
+    unless !current_user.present?
+      authorize @invoice
+    end
+    skip_authorization
     @client = Client.unscoped.find_by_id @invoice.client_id
     respond_to do |format|
-      format.html {render template: 'invoices/invoice_pdf.html.erb', layout:  'pdf_mode'}
+      format.html {render template: 'invoices/show.html.erb'}
       format.js
       format.pdf do
         render  pdf: "#{@invoice.invoice_number}",
@@ -59,30 +64,30 @@ class InvoicesController < ApplicationController
                 encoding: "UTF-8",
                 show_as_html: false,
                 template: 'invoices/show.html.erb',
-                footer:{
-                    right: 'Page [page] of [topage]'
-                }
+                margin:  {   top:               10,                     # default 10 (mm)
+                             bottom:            10,
+                             left:              0,
+                             right:             0 }
       end
     end
   end
 
   def new
-    @current_company_invoices = Invoice.by_company(current_company)
     @invoice = Services::InvoiceService.build_new_invoice(params)
+    authorize @invoice
     @client = Client.find params[:invoice_for_client] if params[:invoice_for_client].present?
     @client = @invoice.client if params[:id].present?
-    @invoice.currency = @client.currency if @client.present?
+    @invoice.currency = Currency.find_by(unit: Settings.default_currency)
     get_clients_and_items
     @discount_types = @invoice.currency.present? ? ['%', @invoice.currency.unit] : DISCOUNT_TYPE
     respond_to do |format|
       format.html # new.html.erb
       format.js
-      #format.json { render :json => @invoice }
     end
   end
 
   def edit
-    @current_company_invoices = Invoice.by_company(current_company)
+    authorize @invoice
     if @invoice.invoice_type.eql?("ProjectInvoice")
       redirect_to :back, alert:  t('views.invoices.project_invoice_cannot_updated')
     else
@@ -90,7 +95,10 @@ class InvoicesController < ApplicationController
       @invoice.build_recurring_schedule if @invoice.recurring_schedule.blank?
       get_clients_and_items
       @discount_types = @invoice.currency.present? ? ['%', @invoice.currency.unit] : DISCOUNT_TYPE
-      respond_to {|format| format.js; format.html}
+      respond_to do |format|
+        format.js
+        format.html
+      end
     end
   end
 
@@ -105,6 +113,7 @@ class InvoicesController < ApplicationController
     @invoice.company_id = get_company_id()
     @invoice.create_line_item_taxes()
     assign_company_to_client if request.format.json?
+    authorize @invoice
     respond_to do |format|
       if @invoice.save
         @invoice.delay.notify_client_with_pdf_invoice_attachment(current_user, @invoice.id) unless params[:save_as_draft].present?
@@ -119,6 +128,7 @@ class InvoicesController < ApplicationController
   end
 
   def update
+    authorize @invoice
     @invoice.company_id = get_company_id()
     @notify = params[:save_as_draft].present? ? false : true
     @invoice.update_dispute_invoice(current_user, @invoice.id, params[:response_to_client], @notify) unless params[:response_to_client].blank?
@@ -148,12 +158,57 @@ class InvoicesController < ApplicationController
   end
 
   def destroy
+    authorize @invoice
     @invoice.destroy
 
     respond_to do |format|
-      format.html { redirect_to invoices_url }
+      format.html { redirect_to invoices_path }
       format.json { render_json(@invoice) }
     end
+  end
+
+  def abc
+  end
+
+  def invoice_receipt
+    @invoice = Invoice.find(params[:id])
+    respond_to do |format|
+      format.pdf do
+        render pdf: 'invoice_receipt',
+               layout: "pdf_mode.html.erb",
+               encoding: "UTF-8",
+               template: 'invoices/invoice_receipt.html.erb',
+               footer: {
+                   html: {
+                       template: 'payments/_payment_tagline'
+                   }
+               }
+      end
+    end
+  end
+
+  def void_invoice
+    @invoice = Invoice.find(params[:id])
+    @invoice.status = "void"
+    @invoice.base_currency_equivalent_total = 0
+    @invoice.invoice_total = 0
+    @invoice.sub_total = 0
+    @invoice.invoice_line_items.each do |item|
+      item.item_unit_cost = 0
+      item.tax_1 = 0
+      item.tax_2 = 0
+      item.save
+    end
+    @invoice.save
+    respond_to do |format|
+      format.js
+      format.html { redirect_to invoices_path }
+    end
+  end
+
+  def clone
+    @invoice = @invoice.clone
+    render action: 'edit'
   end
 
   def filter_invoices
@@ -167,6 +222,18 @@ class InvoicesController < ApplicationController
     render :action => 'invoice_deleted_message', :notice => t('views.invoices.invoice_deleted') if @invoice == 'invoice deleted'
     respond_to do |format|
       format.html {render template: 'invoices/preview.html.erb', layout:  'pdf_mode'}
+      format.js
+    end
+  end
+
+  def set_client_currency
+    @client = Client.find params[:client_id]
+    if Settings.currency.eql?('Off') && Settings.default_currency.present?
+      @currency = Currency.find_by(unit: Settings.default_currency)
+    else
+      @currency = @client.currency
+    end
+    respond_to do |format|
       format.js
     end
   end
@@ -217,7 +284,7 @@ class InvoicesController < ApplicationController
     @invoices_with_payments = result[:invoices_with_payments]
     respond_to do  |format|
       format.js
-      format.html { redirect_to invoices_url, notice: t('views.invoices.bulk_action_msg', action: @action) }
+      format.html { redirect_to invoices_path, notice: t('views.invoices.bulk_action_msg', action: @action) }
     end
   end
 
@@ -264,7 +331,7 @@ class InvoicesController < ApplicationController
 
   def paypal_payments
     # send a post request to paypal to verify payment data
-    response = RestClient.post(OSB::CONFIG::PAYPAL[:url], params.merge({"cmd" => "_notify-validate"}), :content_type => "application/x-www-form-urlencoded")
+    response = RestClient.post("#{OSB::CONFIG::PAYPAL[:url]}/cgi-bin/webscr", params.merge({"cmd" => "_notify-validate"}), :content_type => "application/x-www-form-urlencoded")
     invoice = Invoice.find(params["invoice"])
     # if status is verified make an entry in payments and update the status on invoice
     if response == "VERIFIED"
@@ -272,7 +339,7 @@ class InvoicesController < ApplicationController
                                   :payment_method => "paypal",
                                   :payment_amount => params[:payment_gross],
                                   :payment_date => Date.today,
-                                  :notes => params[:txn_id],
+                                  :notes => params.map{|k, v| "#{k.humanize}: #{v}" }.join("\n"),
                                   :paid_full => 1
                               })
       invoice.update_attribute('status', 'paid')
@@ -280,42 +347,18 @@ class InvoicesController < ApplicationController
     render :nothing => true
   end
 
-  def pay_with_credit_card
-    paypal = PaypalService.new(params)
-    @result = paypal.process_payment
-
-    respond_to { |format| format.js }
-  end
-
-  def payment_with_credit_card
-    begin
-      @invoice = Invoice.unscoped.where(id: params[:invoice_id]).first
-      @invoice.payments.create({
-                                  :payment_method => "Stripe",
-                                  :payment_amount => params[:amount].to_f/100,
-                                  :payment_date => Date.today,
-                                  :paid_full => 1,
-                                  :company_id => @invoice.company_id
-                              })
-      @invoice.update_attributes(status: 'paid')
-      flash[:notice] = t('views.invoices.paid_msg')
-    rescue
-      flash[:alert] = t('views.invoices.payment_error_msg')
-    end
-    redirect_to preview_invoices_url(inv_id: params[:inv_id])
-  end
-
   def send_invoice
     @invoice.send_invoice(current_user, params[:id])
+    respond_to {|format| format.js}
   end
 
   def stop_recurring
     recurring = @invoice.recurring_parent.recurring_schedule
     if recurring.present?
       recurring.update_attributes(enable_recurring: false)
-      redirect_to(invoices_url, notice: t('views.invoices.recurring_stopped_msg'))
+      redirect_to(invoices_path, notice: t('views.invoices.recurring_stopped_msg'))
     else
-      redirect_to(invoices_url, alert: t('views.invoices.recurring_cannot_stopped_msg'))
+      redirect_to(invoices_path, alert: t('views.invoices.recurring_cannot_stopped_msg'))
     end
   end
 
@@ -337,7 +380,6 @@ class InvoicesController < ApplicationController
   end
 
   def verify_authenticity_token
-    # binding.pry
   end
 
   def invoice_has_deleted_clients?(invoices)
@@ -362,7 +404,7 @@ class InvoicesController < ApplicationController
 
   def sort_column
     params[:sort] ||= 'created_at'
-    Invoice.column_names.include?(params[:sort]) ? params[:sort] : 'clients.organization_name'
+    Invoice.column_names.include?(params[:sort]) ? params[:sort] : 'created_at'
   end
 
   def sort_direction
@@ -371,7 +413,7 @@ class InvoicesController < ApplicationController
   end
 
   def invoice_params
-    params.require(:invoice).permit(:client_id, :discount_amount, :discount_type,
+    params.require(:invoice).permit(:client_id, :discount_amount, :discount_type, :conversion_rate, :base_currency_id, :base_currency_equivalent_total,
                                     :discount_percentage, :invoice_date, :invoice_number,
                                     :notes, :po_number, :status, :sub_total, :tax_amount, :terms,
                                     :invoice_total, :invoice_line_items_attributes, :archive_number,

@@ -33,10 +33,10 @@ $(document).ready(function(){
 
   $('#btn-help').click(function(){
         $(this).next().find('.total-income').toggleClass('show-panel');
-    }); 
+    });
 
   $('.menudd').click(function(){
-        $(this).parent().toggleClass('activedd'); 
+        $(this).parent().toggleClass('activedd');
      });
 
   initBulkActionCheckboxes()
@@ -92,8 +92,8 @@ $(document).ready(function(){
       else{
           $("#invoices-list #radioBtn a").removeClass("active");
           $(this).addClass('active');
-          $(".data-wrapper > ul").hide();
-          $(".data-wrapper > ul").eq(ind).show();
+          $("#invoices-list .data-wrapper > ul").hide();
+          $("#invoices-list .data-wrapper > ul").eq(ind).show();
       }
   });
 
@@ -130,7 +130,7 @@ $(document).ready(function(){
       $('.content-detail, .staff-list').find("input").removeAttr('disabled');
       $('.content-detail, .staff-list').find(".initialized").removeAttr('disabled');
       $('.content-detail, .staff-list').find(".not-editable").attr('disabled', true);
-      $('select').material_select();
+      // $('select').material_select();
       $(".submitProject").removeClass('hidden');
       $(this).addClass('hidden')
       $("strong.project_name, span.project_description").attr('contenteditable', true);
@@ -207,7 +207,7 @@ function initBulkActionCheckboxes() {
       $('a.select2-search-choice-close').click();
     }
   });
-  $('select').material_select();
+  // $('select').material_select();
   $('.modal').modal();
   //---Checkbox Items
   $('.checkbox-item > input[type="checkbox"]').on('change', function () {
@@ -336,4 +336,18 @@ function initBulkActionCheckboxes() {
       $("input.top_links.recover_deleted").click();
     }
   });
+
+    $('.dashboard-whitebox #radioBtn a').on('click', function(){
+        var ind = $(this).index();
+        if($(this).hasClass('active')){
+            return
+        }
+        else{
+            $(".dashboard-whitebox #radioBtn a").removeClass("active");
+            $(this).addClass('active');
+            $(".dashboard-whitebox .data-wrapper > ul").hide();
+            $(".dashboard-whitebox .data-wrapper > ul").eq(ind).show();
+        }
+    });
+
 }

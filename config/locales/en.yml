@@ -27,6 +27,7 @@ en:
   task: "Task"
   tax: "Tax"
   staff: "Staff"
+  role: "Role"
 
   date:
     formats:
@@ -109,6 +110,7 @@ en:
       cancel: "Cancel"
       type: "Type"
       date: "Date"
+      payment_date: "Payment Date"
       total: "Total"
       status: "Status"
       invoice_type: "Invoice Type"
@@ -155,6 +157,7 @@ en:
       fax: "Fax"
       address: "Address"
       received: "Received"
+      refund: "Refund"
       available: "available"
       method: "Method"
       notes: "Notes"
@@ -188,7 +191,7 @@ en:
       recover_deleted: "Recover deleted"
       recover_archived: "Recover archived"
       delete_archived: "Delete archived"
-      send_to_archive: "Send to Archive"
+      send_to_archive: "Archive"
       recurring: "Recurring"
       deleted: "Deleted"
       archived: "Archived"
@@ -213,10 +216,10 @@ en:
       please_select: "Please Select"
 
     pagination:
-      previous: "Previous"
+      previous: "Prev"
       next: "Next"
-      first: ""
-      last: ""
+      first: "First"
+      last: "Last"
 
     flash:
 
@@ -255,7 +258,10 @@ en:
       received_payment_detail: "Which Invoices have you received payment for?"
       apply_payment_detail: "Select one or more Invoices from the list below to apply payment."
       selected_amount_detail: "You haven't selected any invoice. Please select one or more invoices and try again."
-      enter_payment: "Enter payment"
+      enter_payment: "Payment"
+      refund_payment: "Refund"
+      clone: 'Clone'
+      delete: 'Delete'
 
     invoices:
       invoice: "Invoices"
@@ -286,10 +292,13 @@ en:
       line_total: "Line Total"
       invoice_number: "Invoice #"
       invoice_amount: "Invoice Amount"
+      amount: "Amount"
+      invoice_amount_base: "Invoice Amount (Base Currency)"
       invoice_status: "Invoice Status"
       date_to_use: "Date to use"
       invoice_type: "Invoice Type"
       amount_paid: "Amount Paid"
+      amount_refund: "Amount Refund"
       amount_due: "Amount Due"
       this_invoice_was_sent_using: "This invoice was sent using"
       no_unpaid_invoices: "There are no unpaid invoices."
@@ -308,6 +317,7 @@ en:
       no_deleted_msg: "You haven't any deleted invoice."
       sent_to: "Sent To"
       received_from: "Received From"
+      received_invoice: "Received Invoice"
       draft: "Draft"
       sent: "Sent"
       viewed: "Viewed"
@@ -316,6 +326,7 @@ en:
       draft_partial: "Draft Partial"
       disputed: "Disputed"
       invoiced: "Invoiced"
+      void: "Void"
       every: "Every"
       remaining: "Remaining"
       stop_recurring: "Stop Recurring"
@@ -335,6 +346,7 @@ en:
       partial_tooltip: "Client has made partial payment against the invoice."
       draft_partial_tooltip: "Payment received against the draft invoice."
       disputed_invoice: "Client has disputed this invoice."
+      void_invoice: "This invoice is cancelled."
       project_invoice_cannot_updated: "Project Invoice cannot be updated"
       saved_as_draft_msg: "The invoice has been saved as draft."
       created_and_sent_msg: "Invoice has been created and sent to %{org_name}."
@@ -575,6 +587,8 @@ en:
       atleast_one_company_required: "Select at least one company"
       business_email: "Business Email"
       vat_number: "VAT Number"
+      invoiced: "Invoiced"
+      received: "Received"
 
     expenses:
       expenses: "Expenses"
@@ -635,6 +649,8 @@ en:
       tax_name: "Tax Name"
       add_new_tax: "Add New Tax"
       select_a_tax: "Select a tax..."
+      select_tax_1: "Tax 1"
+      select_tax_2: "Tax 2"
       duplicate_name: "Tax with same name already exists"
       created_msg: "Tax was successfully created."
       updated_msg: "Tax was successfully updated."
@@ -711,6 +727,8 @@ en:
       no_unpaid_invoice: "There are no unpaid invoices to enter payment against."
       no_invoice_selected: "You haven't selected any invoice. Please select one or more invoices and try again."
       payment_date_range: "Payment Date Range"
+      this_payment_was_received_using: "This payment was received using"
+
 
     payment_terms:
       number_of_days: "Number of days"
@@ -724,10 +742,12 @@ en:
       payments_collected: "Payments Collected"
       payments_collected_dtl: "This report shows a history of all payments made for every invoice selectable by client and by date."
       revenue_by_client: "Revenue by Client"
+      revenue_by_client_dtl: "This report shows detail of revenue generated from each client"
       aged_accounts_receivable: "AG Receivable"
       aged_accounts_receivable_dtl: "This report shows summary of outstanding amount against unpaid and/or partially paid invoices for each client."
       invoice_detail_dtl: "This report shows detail invoices for each client."
       item_sales: "Item Sales"
+      item_sales_dtl: "This report shows item sales for each client"
       invoice_detail: "Invoice Report"
       export_to: "Export to"
       print_report: "Print Report"
@@ -739,6 +759,10 @@ en:
       client_total_ar: "Client Total AR"
       total_qty_sold: "Total Qty Sold"
       total_amount: "Total Amount"
+      amount: 'Amount'
+      discount: 'Discount'
+      total: 'Total'
+      invoice_number: 'Inv #'
       total_discount: "Total Discount"
       net_total: "Net Total"
       period_ending: "Period Ending"
@@ -789,6 +813,11 @@ en:
       field_requied: "This field is required."
       email_invalid: "Email is Invalid."
       changes_discarded_msg: "Your changes will be discarded by switching company. Are you sure you want to switch company?"
+
+    Roles:
+      roles: "Roles"
+      name: "Role Name"
+      deleted_msg: "Role has been deleted successfully."
 
     email_templates:
       email_templates: "Email Templates"

@@ -3,7 +3,7 @@
         jQuery(".sent, .partial,.draft, .draft-partial, .paid, .disputed, .viewed").qtip();
     });
 </script>
-<%= form_tag "/payments/enter_payment", id: "invoice_selection" do %>
+<%= form_tag payments_enter_payment_path, id: "invoice_selection" do %>
     <div id="unpaid_invoices" class="modal editableModal editPayment newModel large_modal unpaid_invoice">
       <div class="modal-content">
         <div class="modal-header clearfix text-content">
@@ -54,7 +54,7 @@
               <% @invoices.each do |inv| %>
                   <tr>
                     <td class="align_center td-checkbox"><%= check_box_tag "invoice_ids[]", inv.id, false, class: 'fix-left-and-opacity' %></td>
-                    <td class="align_center"><%= inv.invoice_number %></td>
+                    <td class="align_center"><%= inv.formatted_invoice_number %></td>
                     <td class="align_left"><%= inv.notes %></td>
                     <td class="align_left"><%= inv.client.organization_name rescue "" %></td>
                     <td class="align_center currency"><%= number_to_currency(inv.invoice_total, unit: inv.currency.present? ? inv.currency.unit : "$") %>

@@ -49,6 +49,10 @@ module EstimatesHelper
     notice.html_safe
   end
 
+  def taxes_class
+    ['without_tax', 'with_single_tax', 'with_dual_tax'][[@estimate.has_tax_one?, @estimate.has_tax_two?].select{|bol| bol == true }.length]
+  end
+
   def convert_to_invoices
     notice = <<-HTML
      <p>#{ids.size} #{t('views.estimates.converted_to_invoice_msg')}</p>
@@ -230,5 +234,28 @@ module EstimatesHelper
 
   def estimate_params(params)
     params.except(:page).slice(:per, :company_id, :sort, :direction).merge(params)
+  end
+
+  def history_of_estimate
+    activities_arr = []
+    @estimate.activities.each do |activity|
+      unless activity.parameters.empty?
+        if activity.key == 'estimate.create'
+          activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} created estimate on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+        end
+        if activity.present? && activity.parameters['obj'].present? && activity.parameters['obj']['status'].present?
+          if estimate_status(activity) == 'sent'
+            activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} sent estimate to clients on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+          elsif estimate_status(activity) == 'invoiced'
+            activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} changed this estimate to invoice on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+          end
+        end
+      end
+    end
+    activities_arr.reverse.join(", ").gsub(",", '<br/>').html_safe
+  end
+
+  def estimate_status activity
+    activity.parameters['obj']['status'][1]
   end
 end

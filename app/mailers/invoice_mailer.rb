@@ -22,16 +22,20 @@ class InvoiceMailer < ActionMailer::Base
   default :from => 'support@opensourcebilling.org'
   @@response_to_client = ''
   @@reason_by_client =  ''
-  def new_invoice_email(client, invoice, e_id , current_user, invoice_pdf_file=nil)
+  def new_invoice_email(client_id, invoice_id, e_id , current_user_id, invoice_pdf_file=nil)
+    client = Client.find_by_id client_id
+    invoice = Invoice.find_by_id invoice_id
+    current_user = User.find_by_id current_user_id
     template = replace_template_body(current_user, invoice, 'New Invoice') #(logged in user,invoice,email type)
     @email_html_body = template.body
     attachments["Invoice-#{invoice.invoice_number}.pdf"] = invoice_pdf_file if invoice_pdf_file
-    email_body = mail(to: (client.billing_email if client.billing_email.present?),
+    client_email = [client.email, client.billing_email]
+    email_body = mail(to: (client_email), from: (invoice.company.mail_config.from),
                       cc: (template.cc.present? ? client.email+","+template.cc : client.email), bcc: (template.bcc if template.bcc.present?) , subject: template.subject).body.to_s
     invoice.sent_emails.create({
                                    :content => email_body,
                                    :sender => current_user.email, #User email
-                                   :recipient => client.email, #client email
+                                   :recipient => client.email, #clients email
                                    :subject => template.subject,
                                    :type => 'Invoice',
                                    :company_id => invoice.company_id,
@@ -41,19 +45,19 @@ class InvoiceMailer < ActionMailer::Base
 
   def send_note_email(response_to_client, invoice, client, current_user)
     @@response_to_client = response_to_client
-   # @response_to_client, @invoice, @client, @current_user  = response_to_client, invoice , client, current_user
+   # @response_to_client, @invoice, @clients, @current_user  = response_to_client, invoice , clients, current_user
     template = replace_template_body(current_user, invoice, 'Dispute Reply') #(logged in user,invoice,email type)
     @email_html_body = template.body
     invoice.sent_emails.create({
                                    :content => response_to_client,
                                    :sender => current_user.email, #User email
-                                   :recipient => client.email, #client email
-                                   :subject => 'Response to client',
+                                   :recipient => client.email, #clients email
+                                   :subject => 'Response to clients',
                                    :type => 'Disputed',
                                    :company_id => invoice.company_id,
                                    :date => Date.today
                                })
-    mail(to: client.email, cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: template.subject)
+    mail(to: client.email, from: (invoice.company.mail_config.from), cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: template.subject)
 
   end
 
@@ -62,11 +66,11 @@ class InvoiceMailer < ActionMailer::Base
     client = invoice.client
     template = replace_template_body(nil, invoice, 'Soft Payment Reminder') #(logged in user,invoice,email type)
     @email_html_body = template.body
-    mail(to: client.email, cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: template.subject)
+    mail(to: client.email, from: (invoice.company.mail_config.from), cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: template.subject)
 
     invoice.sent_emails.create({
                                    content: @email_html_body,
-                                   recipient: client.email, #client email
+                                   recipient: client.email, #clients email
                                    subject: template.subject,
                                    type: 'Soft Payment Reminder',
                                    company_id: invoice.company_id,
@@ -79,10 +83,10 @@ class InvoiceMailer < ActionMailer::Base
     client = invoice.client
     template = replace_template_body(nil, invoice, 'First Late Payment Reminder') #(logged in user,invoice,email type)
     @email_html_body = template.body
-    mail(to: client.email, cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: template.subject)
+    mail(to: client.email, from: (invoice.company.mail_config.from), cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: template.subject)
     invoice.sent_emails.create({
                                    content: @email_html_body,
-                                   recipient: client.email, #client email
+                                   recipient: client.email, #clients email
                                    subject: template.subject,
                                    type: 'First Late Payment Reminder',
                                    company_id: invoice.company_id,
@@ -95,12 +99,12 @@ class InvoiceMailer < ActionMailer::Base
     @@reason_by_client = reason
     template = replace_template_body(user, invoice, 'Dispute Invoice') #(logged in user,invoice,email type)
     @email_html_body = template.body
-    mail(to: user.email, cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: template.subject)
+    mail(to: user.email, from: (invoice.company.mail_config.from), cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: template.subject)
     invoice.sent_emails.create({
                                    :content => reason,
                                    :sender => invoice.client.try(:email), #User email
-                                   :recipient => user.email, #client email
-                                   :subject => 'Reason from client',
+                                   :recipient => user.email, #clients email
+                                   :subject => 'Reason from clients',
                                    :type => 'Disputed',
                                    :company_id => invoice.company_id,
                                    :date => Date.today
@@ -108,12 +112,12 @@ class InvoiceMailer < ActionMailer::Base
   end
   def response_to_client(user, invoice, response)
     @user, @invoice, @response = user, invoice, response
-    mail(to: @invoice.client.email, cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: 'Invoice Undisputed')
+    mail(to: @invoice.client.email, from: (invoice.company.mail_config.from), cc: (template.cc if template.cc.present?), bcc: (template.bcc if template.bcc.present?), subject: 'Invoice Undisputed')
     invoice.sent_emails.create({
                                    :content => response,
                                    :sender => user.email, #User email
-                                   :recipient => invoice.client.try(:email), #client email
-                                   :subject => 'Response to client',
+                                   :recipient => invoice.client.try(:email), #clients email
+                                   :subject => 'Response to clients',
                                    :type => 'Disputed',
                                    :company_id => invoice.company_id,
                                    :date => Date.today
@@ -132,7 +136,9 @@ class InvoiceMailer < ActionMailer::Base
 
   def replace_template_body(user = nil, invoice, template_type)
     template = get_email_template(user, invoice, template_type)
+    client = invoice.client
     param_values = {
+        'new_password_url' => (new_password_client_url(id: invoice.client.hashid)),
         'sender_business_name' => 'OSB LLC',
         'client_contact'=> (invoice.client.first_name rescue 'ERROR'),
         'currency_symbol' => (invoice.currency_symbol  rescue 'ERROR'),

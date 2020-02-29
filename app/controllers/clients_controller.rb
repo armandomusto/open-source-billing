@@ -19,9 +19,11 @@
 # along with Open Source Billing.  If not, see <http://www.gnu.org/licenses/>.
 #
 class ClientsController < ApplicationController
-  load_and_authorize_resource :client
   helper_method :sort_column, :sort_direction
   before_filter :set_per_page_session
+  after_action :user_introduction, only: [:index, :new], unless: -> { current_user.introduction.client? && current_user.introduction.new_client? }
+  layout :resolve_layout
+  before_action :authenticate_user!, except: %i[new_password create_password]
 
   # GET /clients
   # GET /clients.json
@@ -31,9 +33,9 @@ class ClientsController < ApplicationController
     set_company_session
     params[:status] = params[:status] || 'active'
     @status = params[:status]
-
     @clients = Client.get_clients(params.merge(get_args))
     @client_activity = Reporting::ClientActivity.get_recent_activity(get_company_id, params.deep_dup, current_user)
+    authorize Client
 
     respond_to do |format|
       format.html # index.html.erb
@@ -50,9 +52,10 @@ class ClientsController < ApplicationController
   # GET /clients/1.json
   def show
     @client = Client.find(params[:id])
-    @invoices = @client.invoices
-    @payments = Payment.payments_history(@client)
-    @detail = Services::ClientDetail.new(@client).get_detail
+    authorize @client
+    @invoices = @client.invoices.last(5)
+    @payments = Payment.payments_history(@client).last(5)
+
     respond_to do |format|
       format.html # show.html.erb
       format.js
@@ -64,6 +67,7 @@ class ClientsController < ApplicationController
   # GET /clients/new.json
   def new
     @client = Client.new
+    authorize @client
     @client.client_contacts.build()
     respond_to do |format|
       format.html # new.html.erb
@@ -76,6 +80,7 @@ class ClientsController < ApplicationController
   # GET /clients/1/edit
   def edit
     @client = Client.find(params[:id])
+    authorize @client
     @client.payments.build({:payment_type => "credit", :payment_date => Date.today})
     respond_to do |format|
       format.html
@@ -94,11 +99,13 @@ class ClientsController < ApplicationController
     end
 
     @client = Client.new(client_params)
+    @client.skip_password_validation = true
+    authorize @client
     company_id = get_company_id()
     options = params[:quick_create] ? params.merge(company_ids: company_id) : params
     associate_entity(options, @client)
 
-    @client.add_available_credit(params[:available_credit], company_id) if params[:available_credit].present? && params[:available_credit].to_i > 0
+    #@client.add_available_credit(params[:available_credit], company_id) if params[:available_credit].present? && params[:available_credit].to_i > 0
 
     respond_to do |format|
       if @client.save
@@ -116,12 +123,15 @@ class ClientsController < ApplicationController
   # PUT /clients/1.json
   def update
     @client = Client.find(params[:id])
+    authorize @client
     associate_entity(params, @client)
 
     #add/update available credit
+=begin
     if params[:available_credit].present?
     @client.payments.first.blank? ? @client.add_available_credit(params[:available_credit], get_company_id()) : @client.update_available_credit(params[:available_credit])
     end
+=end
 
     respond_to do |format|
       if @client.update_attributes(client_params)
@@ -140,10 +150,11 @@ class ClientsController < ApplicationController
   # DELETE /clients/1.json
   def destroy
     @client = Client.unscoped.find(params[:id])
+    authorize @client
     @client.destroy
 
     respond_to do |format|
-      format.html { redirect_to clients_url }
+      format.html { redirect_to clients_path }
       format.json { render_json(@client) }
     end
   end
@@ -155,8 +166,24 @@ class ClientsController < ApplicationController
     #@message = get_intimation_message(result[:action_to_perform], result[:client_ids])
     @action =  result[:action]
     respond_to do |format|
-      format.html { redirect_to clients_url, notice: t('views.clients.bulk_action_msg', action: @action) }
+      format.html { redirect_to clients_path, notice: t('views.clients.bulk_action_msg', action: @action) }
       format.js
+    end
+  end
+
+  def new_password
+    @client = Client.find(params[:id])
+    if @client.encrypted_password.present?
+      redirect_to new_portal_client_session_path
+    end
+  end
+
+  def create_password
+    @client = Client.find(params[:id])
+    @client.password = params[:client][:password]
+    @client.password_confirmation = params[:client][:password_confirmation]
+    if @client.save
+      redirect_to new_portal_client_session_path
     end
   end
 
@@ -228,5 +255,11 @@ class ClientsController < ApplicationController
     )
   end
 
+  def resolve_layout
+    case action_name
+    when "new_password"
+      "login"
+    end
+  end
 
 end

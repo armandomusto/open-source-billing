@@ -3,11 +3,16 @@ class Estimate < ActiveRecord::Base
   include DateFormats
   include Trackstamps
   include EstimateSearch
+  include PublicActivity::Model
+  tracked only: [:create, :update], owner: ->(controller, model) { controller && controller.current_user }, params:{ "obj"=> proc {|controller, model_instance| model_instance.changes}}
+
   scope :multiple, ->(ids_list) {where("id in (?)", ids_list.is_a?(String) ? ids_list.split(',') : [*ids_list]) }
   scope :status, -> (status) { where(status: status) }
   scope :client_id, -> (client_id) { where(client_id: client_id) }
   scope :estimate_number, -> (estimate_number) { where(id: estimate_number) }
   scope :estimate_date, -> (estimate_date) { where(estimate_date: estimate_date) }
+  scope :with_clients, -> { joins("LEFT OUTER JOIN clients ON clients.id = estimates.client_id")}
+  scope :skip_draft, -> { where.not('status = ?', 'draft') }
 
   # constants
   STATUS_DESCRIPTION = {
@@ -39,6 +44,14 @@ class Estimate < ActiveRecord::Base
   acts_as_archival
   acts_as_paranoid
   paginates_per 10
+
+  def has_tax_one?
+    self.estimate_line_items.where('tax_1 is not null').exists?
+  end
+
+  def has_tax_two?
+    self.estimate_line_items.where('tax_2 is not null').exists?
+  end
 
   def set_default_currency
     self.currency = Currency.default_currency unless self.currency_id.present?
@@ -220,7 +233,9 @@ class Estimate < ActiveRecord::Base
   end
 
   def notify(current_user, id = nil)
-    EstimateMailer.delay.new_estimate_email(self.client, self, self.encrypted_id, current_user)
+    current_company = Company.find(current_user.current_company)
+    NotificationWorker.perform_async('EstimateMailer','new_estimate_email',[self.client_id, self.id, self.encrypted_id, current_user.id], current_company.smtp_settings)
+    # EstimateMailer.delay.new_estimate_email(self.client, self, self.encrypted_id, current_user)
   end
 
   def send_estimate current_user, id

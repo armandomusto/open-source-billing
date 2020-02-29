@@ -1,13 +1,22 @@
+require 'sidekiq/web'
 Osb::Application.routes.draw do
 
+  resources :notifications, only: :index
+
+  get 'activities/index'
+
   mount OsbApi::Engine => "/api"
+  mount GrapeSwaggerRails::Engine => '/api/docs'
   use_doorkeeper :scope => 'developer'
+
+  mount Sidekiq::Web => '/sidekiq'
 
   #namespace :OpenSourceBilling do
   #  resources :people
   #end
   #get '/auth/:provider/callback', to: 'sessions#create'
   scope "(:locale)" do
+    get '/', to: redirect{Rails.application.routes.url_helpers.new_user_session_path}
 
     resources :tasks do
       collection do
@@ -49,12 +58,26 @@ Osb::Application.routes.draw do
       end
     end
 
-    #API authentication for create invoice and client
+    resources :masquerades, only: [:create, :destroy]
+
+    #API authentication for create invoice and clients
     post '/token_authentication', to: 'authenticate#token'
 
     resources :settings do
       member do
         get 'set_default_currency'
+      end
+      collection do
+        post :nav_format
+        resources :roles
+        get :invoice_number_format
+      end
+    end
+
+    resources :roles do
+      collection do
+        get :roles_settings
+        delete :destroy_bulk
       end
     end
 
@@ -64,8 +87,23 @@ Osb::Application.routes.draw do
 
     resources :accounts
     resources :help
+
+    resources :reports, only: [] do
+      collection do
+        get :invoice_detail
+        get :aged_accounts_receivable
+        get :item_sales
+        get :payments_collected
+        get :revenue_by_client
+      end
+    end
+    resources :activities do
+      collection do
+        post :read_notifications
+      end
+    end
     get "reports/:report_name" => "reports#reports"
-    get "reports/data/:report_name" => "reports#reports_data"
+    get "reports/data/:report_name" => "reports#payments_collected"
     get "reports" => "reports#index"
 
     get "dashboard" => "dashboard#index"
@@ -74,6 +112,7 @@ Osb::Application.routes.draw do
     resources :payments do
       collection do
         get 'enter_payment'
+        get 'refund_payment'
         put 'update_individual_payment'
         get 'filter_payments'
         get 'bulk_actions'
@@ -103,15 +142,35 @@ Osb::Application.routes.draw do
         get 'undo_actions'
       end
       member do
+        post :create_password
         get 'default_currency'
       end
     end
+    get "clients/:id/joinOSB" => 'clients#new_password', as: 'new_password_client'
 
 
     resources :client_contacts
 
 
-    devise_for :users, :path_names => {:sign_out => 'logout'}
+    devise_for :users
+    #, controllers: {sessions: "devise/sessions", registrations: "devise/registrations", passwords: "devise/passwords"}
+    scope module: 'portal/client', path: 'portal/client', as: 'portal' do
+      #,  controllers: {sessions: "portal/clients/sessions", registrations: "portal/clients/registrations", passwords: "portal/clients/passwords"}
+      resources :invoices do
+        member do
+          get :invoice_receipt
+        end
+      end
+      resources :estimates
+      resources :payments
+      resources :settings
+      #get "client/dashboard" => "dashboard#index"
+      resources :dashboard, only: :index
+    end
+
+    scope path: 'portal', as: 'portal' do
+      devise_for :clients
+    end
 
     devise_scope :user do
       root :to => "devise/sessions#new"
@@ -155,12 +214,14 @@ Osb::Application.routes.draw do
         get 'preview'
         get 'credit_card_info'
         get 'selected_currency'
+        get :set_client_currency
+        get 'void_invoice'
       end
       member do
         get 'stop_recurring'
+        get 'clone'
       end
     end
-
 
     resources :projects do
       collection do
@@ -234,6 +295,7 @@ Osb::Application.routes.draw do
         get 'bulk_actions'
         get 'undo_actions'
         get 'preview'
+        get :set_client_currency
       end
       member do
         get 'convert_to_invoice'

@@ -46,7 +46,7 @@ class @OsbPlugins
       $('.qtip').remove()
 
   @empty_tax_fields = (tax_container) ->
-    tax_container.find('select.tax1, select.tax2').val('').material_select()
+    tax_container.find('select.tax1, select.tax2').val('').select2()
 
   @load_functions = ->
 
@@ -75,15 +75,14 @@ class @OsbPlugins
       InvoiceCalculator.updateInvoiceTotal()
 
     OsbPlugins.removeQtipOnModalClose()
-    $('select').material_select();
+#    $('select').material_select();
 
     # Re calculate the total invoice balance if an item is removed
     $(".remove_nested_fields").on "click", ->
       setTimeout (->
         InvoiceCalculator.updateInvoiceTotal()
       ), 100
-
-    Invoice.setInvoiceDueDate($("#invoice_invoice_date").val(),$("#invoice_payment_terms_id option:selected").attr('number_of_days'))
+    Invoice.setInvoiceDueDate($("#invoice_date_picker").val(),$("#invoice_payment_terms_id option:selected").attr('number_of_days'))
 
     # Subtract discount percentage from subtotal
     $("#invoice_discount_percentage, #recurring_profile_discount_percentage").on "blur keyup", ->
@@ -108,7 +107,7 @@ class @OsbPlugins
         false
 
     # re calculate invoice due date on invoice date change
-    $("#invoice_invoice_date").change ->
+    $("#invoice_date_picker").change ->
       $(this).qtip("hide") if $(this).qtip()
       term_days = $("#invoice_payment_terms_id option:selected").attr('number_of_days')
       Invoice.setInvoiceDueDate($(this).val(),term_days)
@@ -121,7 +120,7 @@ class @OsbPlugins
       cost = $(container).find("input.cost")
       qty = $(container).find("input.qty")
       cost.val(parseFloat(cost.val()).toFixed(2)) if cost.val()
-      qty.val(parseInt(qty.val())) if qty.val()
+      qty.val(qty.val()) if qty.val()
 
     InvoiceCalculator.updateInvoiceTotal()
     $('.remove_nested_fields').on 'click', ->
@@ -132,7 +131,7 @@ class @OsbPlugins
     $('#invoice_payment_terms_id').change ->
       number_of_days = undefined
       number_of_days = $('option:selected', this).attr('number_of_days')
-      Invoice.setInvoiceDueDate $('#invoice_invoice_date').val(), number_of_days
+      Invoice.setInvoiceDueDate $('#invoice_date_picker').val(), number_of_days
 
     $("#invoice_client_id").change ->
       OsbPlugins.hidePopover($("#invoice_client_id").parents('.select-wrapper'));
@@ -150,7 +149,7 @@ class @OsbPlugins
     # Validate client, cost and quantity on invoice save
     $(".invoice-form.form-horizontal").submit ->
       $('.invoice_submit_button').addClass('disabled')
-      invoice_date_value = new Date(DateFormats.get_original_date($("#invoice_invoice_date").val()))
+      invoice_date_value = new Date(DateFormats.get_original_date($("#invoice_date_picker").val()))
       due_date_value = new Date(DateFormats.get_original_date($("#invoice_due_date_picker").val()))
       discount_percentage = $("#invoice_discount_percentage").val() || $("#recurring_profile_discount_percentage").val()
       discount_type = $("select#discount_type").val()
@@ -235,7 +234,7 @@ class @OsbPlugins
     $('.modal').modal complete: ->
       $('.qtip').remove()
 
-    $('select').material_select();
+#    $('select').material_select();
 
     # Update line and grand total if line item fields are changed
     jQuery("input.cost, input.qty").on "blur", ->
@@ -286,7 +285,7 @@ class @OsbPlugins
       cost = $(container).find("input.cost")
       qty = $(container).find("input.qty")
       cost.val(parseFloat(cost.val()).toFixed(2)) if cost.val()
-      qty.val(parseInt(qty.val())) if qty.val()
+      qty.val(qty.val()) if qty.val()
 
     EstimateCalculator.updateEstimateTotal()
     $('.remove_nested_fields').on 'click', ->
@@ -303,7 +302,7 @@ class @OsbPlugins
       e.preventDefault()
 
     $("#estimate_client_id").change ->
-      OsbPlugins.hidePopover($("#estimate_client_id").parents('.select-wrapper'));
+      OsbPlugins.hidePopover($("#estimate_client_id").parents('.info-left-section').find('.select2-container'));
     $("#add_line_item").click ->
       OsbPlugins.hidePopover($("#add_line_item"))
     # Change currency of estimate
@@ -329,7 +328,7 @@ class @OsbPlugins
         flag = false
       # Check if client is selected
       else if $("#estimate_client_id").val() is ""
-        OsbPlugins.applyPopover($("#estimate_client_id").parents('.select-wrapper'),"bottomMiddle","topLeft",I18n.t('views.invoices.select_a_client'))
+        OsbPlugins.applyPopover($("#estimate_client_id").parents('.info-left-section').find('.select2-container'),"bottomMiddle","topLeft",I18n.t('views.invoices.select_a_client'))
         flag = false
       # if currency is not selected
       else if $("#estimate_currency_id").val() is "" and $("#estimate_currency_id").is( ":hidden" ) == false

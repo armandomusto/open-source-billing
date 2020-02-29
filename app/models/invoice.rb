@@ -19,20 +19,30 @@
 # along with Open Source Billing.  If not, see <http://www.gnu.org/licenses/>.
 #
 class Invoice < ActiveRecord::Base
+  include Trackstamps
   include ::OSB
   include DateFormats
-  include Trackstamps
   include InvoiceSearch
+  include Hashid::Rails
+  include PublicActivity::Model
+  tracked only: [:create, :update], owner: ->(controller, model) { controller && controller.current_user }, params:{ "obj"=> proc {|controller, model_instance| model_instance.changes}}
+
   scope :multiple, ->(ids_list) {where("id in (?)", ids_list.is_a?(String) ? ids_list.split(',') : [*ids_list]) }
-  scope :current_invoices,->(company_id){ where("IFNULL(due_date, invoice_date) >= ?", Date.today).where(company_id: company_id).order('created_at DESC')}
-  scope :past_invoices, -> (company_id){where("IFNULL(due_date, invoice_date) < ?", Date.today).where(company_id: company_id).order('created_at DESC')}
+  scope :current_invoices,->(company_id){ where("IFNULL(due_date, invoice_date) >= ?", Date.today).where(company_id: company_id).order('due_date DESC')}
+  scope :current_client_invoices,->{ where("IFNULL(due_date, invoice_date) >= ?", Date.today).order('due_date DESC')}
+  scope :past_client_invoices,->{ where("IFNULL(due_date, invoice_date) < ?", Date.today).order('due_date DESC')}
+  scope :past_invoices, -> (company_id){where("IFNULL(due_date, invoice_date) < ?", Date.today).where(company_id: company_id).order('due_date DESC')}
   scope :status, -> (status) { where(status: status) }
   scope :client_id, -> (client_id) { where(client_id: client_id) }
+  scope :skip_draft, -> { where.not('status = ?', 'draft') }
   scope :invoice_number, -> (invoice_number) { where(id: invoice_number) }
   scope :invoice_date, -> (invoice_date) { where(invoice_date: invoice_date) }
   scope :due_date, -> (due_date) { where(due_date: due_date) }
   scope :by_company, -> (company_id) { where("invoices.company_id IN(?)", company_id) }
+  scope :by_client, -> (client_id) { where('invoices.client_id IN(?)', client_id) }
   scope :with_clients, -> { joins("LEFT OUTER JOIN clients ON clients.id = invoices.client_id ")}
+
+  scope :in_year, ->(year) { where('extract(year from invoices.created_at) = ?', year) }
 
   # constants
   STATUS_DESCRIPTION = {
@@ -42,7 +52,8 @@ class Invoice < ActiveRecord::Base
       paid: I18n.t('views.invoices.paid_tooltip'),
       partial: I18n.t('views.invoices.partial_tooltip'),
       draft_partial: I18n.t('views.invoices.draft_partial_tooltip'),
-      disputed: I18n.t('views.invoices.disputed_invoice')
+      disputed: I18n.t('views.invoices.disputed_invoice'),
+      void: I18n.t('views.invoices.void_invoice')
   }
 
 
@@ -53,6 +64,7 @@ class Invoice < ActiveRecord::Base
   belongs_to :company
   belongs_to :project
   belongs_to :currency
+  belongs_to :base_currency, class_name: 'Currency', foreign_key: 'base_currency_id'
   belongs_to :tax
 
   has_many :invoice_line_items, :dependent => :destroy
@@ -73,7 +85,7 @@ class Invoice < ActiveRecord::Base
   before_create :set_invoice_number
   after_destroy :destroy_credit_payments
   before_save :set_default_currency
-  before_save :update_invoice_total
+  after_save :update_invoice_total
 
   # archive and delete
   acts_as_archival
@@ -81,6 +93,10 @@ class Invoice < ActiveRecord::Base
   has_paper_trail :on => [:update], :only => [:last_invoice_status], :if => Proc.new { |invoice| invoice.last_invoice_status == 'disputed' }
 
   paginates_per 10
+
+  def draft?
+    status == 'draft'
+  end
 
   def set_default_currency
     self.currency = Currency.default_currency unless self.currency_id.present?
@@ -128,6 +144,10 @@ class Invoice < ActiveRecord::Base
 
   def unpaid_amount
     invoice_total - payments.where("payment_type is null || payment_type != 'credit'").sum(:payment_amount)
+  end
+
+  def total_received
+    self.payments.received.sum('payment_amount')
   end
 
   # This doesn't actually dispute the invoice. It just updates the invoice status to dispute.
@@ -184,20 +204,22 @@ class Invoice < ActiveRecord::Base
     (self.dup.invoice_line_items << self.invoice_line_items.map(&:dup)).save
   end
 
-  def use_as_template
-    invoice = self.dup
-    invoice.invoice_number = Invoice.get_next_invoice_number(nil)
-    invoice.invoice_date = Date.today
-    invoice.invoice_line_items << self.invoice_line_items.map(&:dup)
-    invoice
-  end
-
   def generate_recurring_invoice(recurring)
-    invoice = use_as_template
+    invoice = self.clone
     invoice.status = recurring.delivery_option.eql?('draft_invoice') ? 'draft' : 'sent'
     invoice.due_date = Date.today + eval(recurring.frequency)
     invoice.parent_id = self.id
     invoice.save
+  end
+
+  def clone
+    invoice = self.dup
+    invoice.invoice_number = Invoice.get_next_invoice_number(nil)
+    invoice.invoice_date = Date.today
+    invoice.invoice_line_items << self.invoice_line_items.map(&:dup)
+    invoice.status = 'draft'
+    invoice.parent_id = nil
+    invoice
   end
 
   def self.multiple_invoices ids
@@ -259,7 +281,8 @@ class Invoice < ActiveRecord::Base
   end
 
   def notify(current_user, id = nil, invoice_pdf_file = nil)
-    InvoiceMailer.delay.new_invoice_email(self.client, self, self.encrypted_id, current_user, invoice_pdf_file)
+    current_company = Company.find(current_user.current_company)
+    NotificationWorker.perform_async('InvoiceMailer','new_invoice_email',[self.client_id, self.id, self.encrypted_id, current_user.id, invoice_pdf_file], current_company.smtp_settings)
   end
 
   def send_invoice current_user, id
@@ -290,6 +313,14 @@ class Invoice < ActiveRecord::Base
     credit_pay.save
   end
 
+  def has_tax_one?
+    self.invoice_line_items.where('tax_1 is not null').exists?
+  end
+
+  def has_tax_two?
+    self.invoice_line_items.where('tax_2 is not null').exists?
+  end
+
   def partial_payments
     where("status = 'partial'")
   end
@@ -299,7 +330,7 @@ class Invoice < ActiveRecord::Base
   end
 
   def fetch_paypal_url user
-    OSB::Paypal::URL
+    "#{OSB::CONFIG::PAYPAL[:url]}/cgi-bin/webscr?"
   end
 
   def paypal_business user
@@ -315,7 +346,9 @@ class Invoice < ActiveRecord::Base
         :notify_url => notify_url,
         :invoice => id,
         :item_name => "Invoice",
-        :amount => unpaid_amount
+        :item_number => id,
+        :amount => unpaid_amount,
+        :currency_code => (self.currency.unit rescue 'USD')
     }
     fetch_paypal_url(user) + values.to_query
   end
@@ -541,12 +574,28 @@ class Invoice < ActiveRecord::Base
   end
 
   def update_invoice_total
-    line_items_total_with_taxes = self.invoice_line_items.to_a.sum(&:item_total_amount).to_f
-    discounted_amount = applyDiscount(line_items_total_with_taxes)
-    subtotal = line_items_total_with_taxes - discounted_amount
-    invoice_tax_amount = self.tax_id.nil? ? 0.0 : (Tax.find_by(id: self.tax_id).percentage.to_f)
-    additional_invoice_tax = invoice_tax_amount.eql?(0.0) ? 0.0 : (subtotal * invoice_tax_amount/100.0).round(2)
-    self.sub_total = line_items_total_with_taxes
-    self.invoice_total = (subtotal + additional_invoice_tax).round(2)
+    unless self.status.eql?('void')
+      line_items_total_with_taxes = self.invoice_line_items.to_a.sum(&:item_total_amount).to_f
+      discounted_amount = applyDiscount(line_items_total_with_taxes)
+      subtotal = line_items_total_with_taxes - discounted_amount
+      invoice_tax_amount = self.tax_id.nil? ? 0.0 : (Tax.find_by(id: self.tax_id).percentage.to_f)
+      additional_invoice_tax = invoice_tax_amount.eql?(0.0) ? 0.0 : (subtotal * invoice_tax_amount/100.0).round(2)
+      self.sub_total = line_items_total_with_taxes
+      self.invoice_total = (subtotal + additional_invoice_tax).round(2)
+    end
+  end
+
+  def formatted_invoice_number
+    param_values = {
+        'invoice_number' => (self.invoice_number),
+        'client_contact' => (self.client.first_name rescue 'Client'),
+        'company_name' => (self.company.company_name rescue 'Company'),
+        'company_contact' => (self.company.company_name rescue 'Company'),
+        'invoice_year' => (self.created_at.year rescue 'Invoice Year'),
+        'invoice_month' => (self.created_at.strftime("%B") rescue 'Invoice Month'),
+        'invoice_day' => (self.created_at.strftime("%d") rescue 'Invoice Day'),
+        'company_abbreviation' => (self.company.abbreviation rescue 'Company Abbreviation')
+    }
+    Settings.invoice_number_format.gsub(/\{\{(.*?)\}\}/) {|m| param_values[$1] }
   end
 end

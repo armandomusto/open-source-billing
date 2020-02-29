@@ -1,10 +1,11 @@
 <%= render 'invoice_activity'%>
+
 <div id="main-content" class='<%= "#{ 'side-show' if side_nav_opened?}"%>'>
   <!--- main content --->
   <div class="flex-wrapper">
     <!--- breadcrum Bar --->
     <div class="flex-item breadcrum-bar">
-      <div class="card-white-panel">
+      <div class="card-white-panel intro invoices-index-false-intro" data-intro='All of your invoices will be listed here' data-step="1">
         <h3 class="with-grid-icons">
           <span><%= link_to t('header.links.invoices.invoices'), invoices_path %> </span>
           <%= link_to "/ #{t('views.common.' + status_text)}", 'javascript:;', class: 'active' %>
@@ -12,6 +13,7 @@
                                         invoices_path(layout_toggle_params(view: 'table'))) %>
         </h3>
       </div>
+
     </div>
   </div>
   <%= render 'filters' %>
@@ -23,6 +25,7 @@
   </div>
 
 </div>
+
 <script>
   initFilterEvents('#create_at_start_date,#create_at_end_date,#due_start_date,#due_end_date,#invoice_number_min,#invoice_number_max');
   <% if is_filter_applied?(%w(create_at_start_date create_at_end_date due_start_date due_end_date invoice_number_min invoice_number_max client_id type)) %>

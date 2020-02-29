@@ -33,13 +33,11 @@
 //= require tableSorter.js
 //= require tablesorter.staticrow.js
 //= require jquery.metadata.js
-//= require application.js
 //= require moment
 //= require daterangepicker.min
 //= require fullcalendar
 //= require calendar.js
 //= require logs.js
-//= require logs_invoice.js.coffee
 //= require clients.js.coffee
 //= require client_additional_contacts.js.coffee
 //= require client_contacts.js.coffee
@@ -47,6 +45,8 @@
 //= require dashboard.js.coffee
 //= require invoice_line_items.js.coffee
 //= require items.js.coffee
+//= require activities.js.coffee
+//= require notifications.js.coffee
 //= require jqamp-ui-spinner.min.js
 //= require jquery.qtip.min.js
 //= require jwerty.js
@@ -57,7 +57,7 @@
 //= require sonic.js
 //= require progress_indicator.js.coffee
 //= require jquery.tablehover.min.js
-//= require tax-calculations.js.coffee
+//= require tax_calculator.js.coffee
 //= require jquery.formatCurrency-1.4.0.js
 //= require table-listing.js.coffee
 //= require credit-payment.js.coffee
@@ -98,9 +98,14 @@
 //= require sweetalert.min
 //= require cocoon
 //= require nouislider
+//= require chartkick
+//= require Chart.bundle
+//= require jquery.infinite-pages
+//= require introjs
+
+
 
 jQuery(function () {
-
     $('#estimate_notes, #expense_note, #invoice_notes, #recurring_profile_notes, #log_notes').keypress(function(e) {
         var tval = $('textarea').val(), tlength = tval.length, max = 400,
         remain = parseInt(max - tlength);
@@ -165,6 +170,7 @@ jQuery(function () {
             });
         });
         $('.sent,.partial,.draft,.draft-partial,.paid,.disputed,.viewed').qtip();
+        initPaginationSpanClick();
     })(jQuery);
 
     //jQuery(".revenue_by_client .grid_table table, .payments_collected .grid_table table").tableHover({colClass: 'col_hover', footCols: true, footRows: true, rowClass: 'row_hover'})
@@ -250,7 +256,7 @@ function initCustomConfirmPopUp() {
         // Showing Custom Popup
         swal({
             title: $(link).data('confirm'),
-            text: I18n.t('helpers.messages.not_be_recoverable'),
+            text: $(link).data('text') ? $(link).data('text') : I18n.t('helpers.messages.not_be_recoverable'),
             icon: 'warning',
             buttons: [true, true],
         }).then(function(confirmed) {
@@ -547,3 +553,25 @@ function display_flash_notice_or_alert_with_toastr(){
         toastr.error('', flash_alert);
     }
 }
+
+function initPaginationSpanClick() {
+    $('nav.pagination span').click(function (event) {
+        if( $(this).find('a').length > 0 ) {
+            window.location.href = $(this).find('a').attr('href');
+        }
+    });
+}
+(function($) {
+    $(function() {
+
+        $('.dropdown-button').dropdown({
+                inDuration: 300,
+                outDuration: 225,
+                hover: false, // Activate on hover
+                belowOrigin: true, // Displays dropdown below the button
+                alignment: 'right' // Displays dropdown with edge aligned to the left of button
+            }
+        );
+
+    }); // End Document Ready
+})(jQuery); // End of jQuery name space

@@ -21,6 +21,7 @@ config/initializers/secret_token.rb
 config/database.yml
 config/deploy/*.rb
 config/config.yml
+config/sidekiq.yml
 
 ## Environment normalisation:
 /.bundle
@@ -35,7 +36,6 @@ config/config.yml
 .rvmrc
 
 node_modules/*
-Gemfile.lock
 
 # track below files
 !/public/404.*

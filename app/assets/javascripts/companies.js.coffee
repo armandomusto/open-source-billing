@@ -25,7 +25,7 @@ class @Company
     $('.modal').modal complete: ->
       $('.qtip').remove()
 
-    $('select').material_select();
+#    $('select').material_select();
 
     jQuery("#company_contact_name,#company_email,#company_company_name").keypress ->
       hideQtip(jQuery(this))
@@ -69,6 +69,7 @@ class @Company
 
 jQuery ->
   #/ Change selected company in companies list in header
+  $('.company_select').material_select();
   $(".company_select").on "change", ->
     if parseInt($(this).find(':selected').val()) == -1
       $(this).val('')

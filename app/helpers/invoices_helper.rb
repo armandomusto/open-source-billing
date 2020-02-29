@@ -20,6 +20,19 @@
 #
 module InvoicesHelper
   include ApplicationHelper
+  def invoices_due_dates invoice
+    return '' if invoice.draft? || invoice.status.eql?('void')
+    if invoice.due_date.present? && invoice.due_date.to_time > Date.today && invoice.status != "paid"
+      "<span class = 'idd invoice-due' title='Due Date: #{invoice.due_date}'>due in #{distance_of_time_in_words(invoice.due_date.to_time - Time.now)}</span>".html_safe
+    elsif invoice.due_date.present? && invoice.due_date.to_time == Date.today.to_time && invoice.status != 'paid'
+      "<span class = 'idd invoice-due' title='Due Date: #{invoice.due_date}'> due today </span>".html_safe
+    elsif invoice.due_date.present? && invoice.due_date.to_time < Date.today && invoice.status != "paid"
+      "<span class = 'idd invoice-over-due' title='Due Date: #{invoice.due_date}'>#{distance_of_time_in_words(Time.now - invoice.due_date.to_time)} overdue</span>".html_safe
+    elsif invoice.due_date.present? && invoice.status == "paid"
+      "<span class = 'idd invoice-paid'> paid on #{invoice.payments.received.last.created_at.strftime("%Y-%m-%d")}</span>".html_safe rescue ''
+    end
+  end
+
   def new_invoice id, is_draft
     message = is_draft ? t('views.invoices.saved_as_draft_msg') : t('views.invoices.created_and_sent_msg', org_name: @invoice.client.organization_name)
     notice = <<-HTML
@@ -27,6 +40,73 @@ module InvoicesHelper
     HTML
     notice.html_safe
   end
+
+  def invoice_payment_received invoice
+    invoice.status.eql?('paid') || invoice.status.eql?('partial') || invoice.status.eql?('draft-partial')
+  end
+
+  def invoice_refund invoice
+    refund = invoice.payments.refunds.sum('payment_amount').abs
+    received = invoice.payments.received.sum('payment_amount')
+    refund == received
+  end
+
+  def selected_payment_term invoice
+    if invoice.new_record?
+      PaymentTerm.last.id
+    else
+      invoice.payment_terms_id
+    end
+  end
+
+  def capitalize_amount amount
+    a=amount.split(' ')
+    a.map do |word|
+      if word == "and"
+        word.downcase
+        else
+        word.capitalize
+      end
+    end
+  end
+
+  def history_of_invoice
+    activities_arr=[]
+    public_activities = PublicActivity::Activity.where('(trackable_type = ? AND trackable_id = ?) OR (trackable_type = ? AND trackable_id IN (?))', 'Invoice', @invoice.id, 'Payment', @invoice.payments.pluck(:id)).order('created_at desc')
+    public_activities.each do |activity|
+      unless activity.parameters.empty?
+        if activity.key == "invoice.create"
+          activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} created invoice on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+        end
+        if activity.present? && activity.parameters['obj'].present? && activity.parameters['obj']['status'].present?
+          if invoice_status(activity) == 'sent'
+            activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} sent invoice to clients on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+          elsif invoice_status(activity) == 'partial'
+            activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} made partial payment for invoice on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+          elsif invoice_status(activity) == 'draft-partial'
+            activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} made draft partial payment for this invoice on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+          elsif invoice_status(activity) == 'paid'
+            activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} made full payment for invoice on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+          end
+        end
+        if activity.present? && activity.key == 'payment.create' && activity.parameters['obj'].present? && activity.parameters['obj']['payment_amount'].present?
+          if activity.parameters['obj']['payment_amount'][1] < 0
+            activities_arr << strip_tags("<div class='col-sm-12'>#{activity.owner.user_name} refund #{number_to_currency(activity.parameters['obj']['payment_amount'][1].abs, unit:  @invoice.currency.code )} on #{activity.created_at.strftime("%d-%b-%y")}</div>")
+          end
+        end
+      end
+    end
+    activities_arr.join(", ").gsub(",", '<br/>').html_safe
+  end
+
+  def invoice_status(activity)
+    activity.parameters['obj']['status'][1]
+  end
+
+  def tax_class
+    ['without_tax', 'with_single_tax', 'with_dual_tax'][[@invoice.has_tax_one?, @invoice.has_tax_two?].select{|bol| bol == true }.length]
+  end
+
 
   def invoices_archived ids
     notice = <<-HTML
@@ -237,13 +317,13 @@ module InvoicesHelper
   end
 
   def load_line_item_taxes2(line_item)
-      if line_item.tax_2.present? and line_item.tax2.nil?
-        load_deleted_tax2(line_item)
-      elsif line_item.tax_2.present? and line_item.tax2.archived?.present?
-        load_archived_tax2(line_item)
-      else
-        load_taxes2
-      end
+    if line_item.tax_2.present? and line_item.tax2.nil?
+      load_deleted_tax2(line_item)
+    elsif line_item.tax_2.present? and line_item.tax2.archived?.present?
+      load_archived_tax2(line_item)
+    else
+      load_taxes2
+    end
     #line_item.tax2.present? ? taxes.prepend([line_item.tax2.name, line_item.tax2.id, {'data-type' => 'active_line_item_tax','data-tax_2' => line_item.tax2.percentage }]) : taxes
   end
 
@@ -262,7 +342,7 @@ module InvoicesHelper
 
 
   def pick_status_color
-    {sent: 'text-blue', paid: 'text-green', partial: 'text-orange', draft: 'text-grey', viewed: 'text-green', draft_partial: 'text-draft-partial', disputed: 'text-red', invoiced: 'text-orange'}
+    {sent: 'text-blue', paid: 'text-green', partial: 'text-orange', draft: 'text-grey', viewed: 'text-green', draft_partial: 'text-draft-partial', disputed: 'text-red', invoiced: 'text-orange', void: 'text-maroon'}
   end
 
   def activities_invoices_path(status)

@@ -1,11 +1,9 @@
 <%= render 'setting_activity' %>
-
-<!--- content --->
 <div id="main-content" class='<%= "#{ 'side-show' if side_nav_opened?}"%> mCustomScrollbar' >
   <!--- main content --->
   <!--- breadcrum Bar --->
   <div class="breadcrum-bar card-white-panel clearfix">
-    <h3> <%= t('views.settings.settings') %> </h3>
+    <h3 class="intro settings-index-false-intro" data-intro="Here you can do settings for your application" data-step="1"> <%= t('views.settings.settings') %> </h3>
   </div>
   <%= render 'basic_setting'%>
 
@@ -14,6 +12,10 @@
   </div>
 </div>
 <script>
-  loadUsersActivitiesSection();
-  loadCompaniesActivitiesSection();
+    delete_user = "<%= destroy_bulk_sub_users_path  %>"
+    delete_company = "<%= destroy_bulk_companies_path  %>"
+    delete_role = "<%= destroy_bulk_roles_path  %>"
+    initUserListingEvents();
+    initCompanyListingEvents();
+    initRoleListingEvents();
 </script>
